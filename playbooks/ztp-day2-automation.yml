@@ -1,0 +1,32 @@
+- name: "Manage Clusters"
+  hosts: "{{ target_clusters }}"
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - block:
+        - include_tasks: ../roles/k8s-cluster-access/tasks/get-temp-access.yml
+          vars:
+            rbac_template: ../k8s-rbac/namespace-mgmt
+            serviceaccount_generate_name: "cluster-mgmt-"
+            ttl: 60
+
+        - include_role:
+            name: ../roles/ztp-day2-automation
+          vars:
+            git_protocol: "{{ git_protocol }}"
+            git_repo: "{{ git_repo_url }}"
+            git_version: "{{ git_scm_version }}"
+            git_user: "{{ git_user }}"
+            git_password: "{{ git_password }}"
+            vault_id: "{{ vault_id }}"
+            vault_password: "{{ vault_password }}"
+
+        - include_role:
+            name: ../roles/create-namespace
+          vars:
+            namespace_name: "{{ namespace }}"
+            state: "{{ state }}"
+      always:
+        - include_tasks: ../roles/k8s-cluster-access/tasks/remove-access.yml
+          ignore_errors: true

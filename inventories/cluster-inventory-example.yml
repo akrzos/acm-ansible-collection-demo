@@ -22,3 +22,7 @@ cluster_groups:
 - name: all-managed-clusters
   label_selectors:
   - name!=local-cluster
+- name: ztp_managed_clusters
+  label_selectors:
+    - name=sno-worker-1
+    - name=sno-worker-2

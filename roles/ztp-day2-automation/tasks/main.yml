@@ -1,0 +1,70 @@
+- name: "Create temporal directory for credentials"
+  tempfile:
+    suffix: "-clusters-creds"
+    state: directory
+  register: creds_tempfile
+
+- name: "Clone GIT repository to store secrets"
+  ansible.builtin.git:
+    repo: "{{ git_protocol }}://{{ git_repo }}"
+    dest: "{{ creds_tempfile.path }}"
+    version: "{{ git_version }}"
+
+- name: "Create subdir per managed cluster"
+  file:
+    path: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}"
+    state: directory
+
+- name: "Get kubeconfig file"
+  k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ hostvars[inventory_hostname].cluster_name }}-admin-kubeconfig"
+    namespace: "{{ hostvars[inventory_hostname].cluster_name }}"
+  register: kubeconfig
+
+- name: "Save kubeconfig file"
+  copy:
+    content: "{{ kubeconfig.resources[0].data.kubeconfig | b64decode }}"
+    dest: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}/kubeconfig-{{ hostvars[inventory_hostname].cluster_name }}.yaml"
+
+- name: "Save API URL"
+  copy:
+    content: "api_url: {{ ( kubeconfig.resources[0].data.kubeconfig | b64decode | from_yaml ).clusters[0].cluster.server }}"
+    dest: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}/api-url-{{ hostvars[inventory_hostname].cluster_name }}.yaml"
+
+- name: "Get kubeadmin credentials"
+  k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ hostvars[inventory_hostname].cluster_name }}-admin-password"
+    namespace: "{{ hostvars[inventory_hostname].cluster_name }}"
+  register: kubeadmin
+
+- name: "Save kubeadmin credentials"
+  copy:
+    content: "{{ kubeadmin_creds }}"
+    dest: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}/admin-pass-{{ hostvars[inventory_hostname].cluster_name }}.yaml"
+  vars:
+    kubeadmin_creds: |
+      username: {{ kubeadmin.resources[0].data.username | b64decode }}
+      password: {{ kubeadmin.resources[0].data.password | b64decode }}
+
+- name: "Create vault password file"
+  copy:
+    content: "{{ vault_password }}"
+    dest: "{{ creds_tempfile.path }}/{{ vault_password }}"
+
+- name: "Encrypt credential files"
+  shell: |
+    ansible-vault encrypt --vault-id {{ vault_id }}@../../{{ vault_password }} kubeconfig-{{ hostvars[inventory_hostname].cluster_name }}.yaml api-url-{{ hostvars[inventory_hostname].cluster_name }}.yaml admin-pass-{{ hostvars[inventory_hostname].cluster_name }}.yaml
+  args:
+    chdir: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}/"
+
+- name: "Commit creds to git repo"
+  shell: |
+    git add cluster-creds/*
+    git commit -m "Creds snapshot taken $(date +"%Y-%m-%d %H:%M:%S")"
+    git push {{ git_protocol }}://{{ git_user | urlencode }}:{{ git_password | urlencode }}@{{ git_repo }}
+  args:
+    chdir: "{{ creds_tempfile.path }}"
