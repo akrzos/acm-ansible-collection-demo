@@ -61,10 +61,25 @@
   args:
     chdir: "{{ creds_tempfile.path }}/cluster-creds/{{ hostvars[inventory_hostname].cluster_name }}/"
 
-- name: "Commit creds to git repo"
+- name: "Authenticate in git repo"
   shell: |
+    git config --global user.email {{ git_user | urlencode }}@redhat.com
+    git config --global user.name {{ git_user | urlencode }}
+  args:
+    chdir: "{{ creds_tempfile.path }}"
+
+- name: "Commit creds to git repo"
+  throttle: 1
+  shell: |
+    git fetch --all --prune 
+    git pull --rebase origin
     git add cluster-creds/*
     git commit -m "Creds snapshot taken $(date +"%Y-%m-%d %H:%M:%S")"
     git push {{ git_protocol }}://{{ git_user | urlencode }}:{{ git_password | urlencode }}@{{ git_repo }}
   args:
     chdir: "{{ creds_tempfile.path }}"
+
+- name: "Remove temporal directory"
+  file:
+    path: "{{ creds_tempfile.path }}"
+    state: absent
