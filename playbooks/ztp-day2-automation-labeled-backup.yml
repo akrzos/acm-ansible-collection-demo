@@ -1,0 +1,69 @@
+---
+- name: "Manage Clusters"
+  hosts: "{{ target_clusters }}"
+  connection: local
+  gather_facts: false
+
+  pre_tasks:
+    - name: "Compute list of managed_clusters labels to run the Ansible hook"
+      set_fact:
+        list_managed_clusters_labels: "{{ lookup('kubernetes.core.k8s', 
+                                                  api_version='cluster.open-cluster-management.io/v1', 
+                                                  kind='ManagedCluster', 
+                                                  resource_name=inventory_hostname, 
+                                                  label_selector='ztp-done').metadata.labels }}"
+
+    - name: "Create maintenance label in managed clusters"
+      k8s:
+        state: patched
+        api_version: cluster.open-cluster-management.io/v1
+        kind: ManagedCluster
+        name: "{{ inventory_hostname }}"
+        definition:
+          metadata:
+            labels:
+              ztp-ansible-running: ""
+      register: maintenance_label_set
+      when: >
+        ( 'ztp-ansible-handled' not in list_managed_clusters_labels )
+        and
+        ( 'ztp-ansible-running' not in list_managed_clusters_labels )
+
+  tasks:
+    - name: "This is just a sample role, could be any other!"
+      include_role:
+        name: ../roles/ztp-day2-automation
+      vars:
+        git_protocol: "{{ git_protocol }}"
+        git_repo: "{{ git_repo_url }}"
+        git_version: "{{ git_scm_version }}"
+        git_user: "{{ git_user }}"
+        git_password: "{{ git_password }}"
+        vault_id: "{{ vault_id }}"
+        vault_password: "{{ vault_password }}"
+      when: maintenance_label_set is changed
+
+    - name: "Create ZTP handled label in target_clusters"
+      k8s:
+        state: patched
+        api_version: cluster.open-cluster-management.io/v1
+        kind: ManagedCluster
+        name: "{{ inventory_hostname }}"
+        definition:
+          metadata:
+            labels:
+              ztp-ansible-handled: ""
+      when: maintenance_label_set is changed
+
+  post_tasks:
+    - name: "Remove maintenance label in managed clusters"
+      k8s:
+        state: patched
+        api_version: cluster.open-cluster-management.io/v1
+        kind: ManagedCluster
+        name: "{{ inventory_hostname }}"
+        definition:
+          metadata:
+            labels:
+              ztp-ansible-running: null
+      when: maintenance_label_set is changed
