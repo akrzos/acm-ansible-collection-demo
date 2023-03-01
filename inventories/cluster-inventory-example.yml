@@ -24,5 +24,6 @@ cluster_groups:
   - name!=local-cluster
 - name: ztp_managed_clusters
   label_selectors:
-    - name=sno-worker-1
-    - name=sno-worker-2
+    - name!=local-cluster
+    - ztp-ansible!=running
+    - ztp-ansible!=completed
