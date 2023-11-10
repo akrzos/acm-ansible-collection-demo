@@ -5,6 +5,16 @@
   gather_facts: false
 
   pre_tasks:
+    - name: "Check labels on the managedcluster"
+      k8s_info:
+        api_version: cluster.open-cluster-management.io/v1
+        kind: ManagedCluster
+        name: "{{ inventory_hostname }}"
+      register: check_mc_label
+
+    - debug:
+        msg: "{{ 'ztp-ansible' not in check_mc_label.resources[0].metadata.labels }}"
+
     - name: "Create maintenance label in managed clusters"
       k8s:
         state: patched
@@ -15,12 +25,13 @@
           metadata:
             labels:
               ztp-ansible: "running"
+      when: "'ztp-ansible' not in check_mc_label.resources[0].metadata.labels"
       register: maintenance_label_set
 
   tasks:
-    - name: Pause for 2 minutes
+    - name: Pause for 5 minutes
       pause:
-        seconds: 120
+        seconds: 300
 #    - name: "This is just a placeholder for a sample role"
 #      include_role:
 #        name: ../roles/cool-vz-role-goes-here
