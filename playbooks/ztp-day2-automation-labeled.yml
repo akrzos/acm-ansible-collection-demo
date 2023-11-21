@@ -12,8 +12,12 @@
         name: "{{ inventory_hostname }}"
       register: check_mc_label
 
+    - name: Set run for cluster variable
+      set_fact:
+        mc_run_playbook: "{{ 'ztp-ansible' not in check_mc_label.resources[0].metadata.labels }}"
+
     - debug:
-        msg: "{{ 'ztp-ansible' not in check_mc_label.resources[0].metadata.labels }}"
+        msg: "{{ mc_run_playbook }}"
 
     - name: "Create maintenance label in managed clusters"
       k8s:
@@ -25,13 +29,15 @@
           metadata:
             labels:
               ztp-ansible: "running"
-      when: "'ztp-ansible' not in check_mc_label.resources[0].metadata.labels"
+      when: mc_run_playbook
       register: maintenance_label_set
 
   tasks:
-    - name: Pause for 5 minutes
-      pause:
-        seconds: 300
+    - name: Pause for 10 minutes
+      wait_for:
+        timeout: 600
+      when: mc_run_playbook
+
 #    - name: "This is just a placeholder for a sample role"
 #      include_role:
 #        name: ../roles/cool-vz-role-goes-here
@@ -51,4 +57,6 @@
           metadata:
             labels:
               ztp-ansible: "completed"
-      when: maintenance_label_set is changed
+      when:
+      - mc_run_playbook
+      - maintenance_label_set is changed
