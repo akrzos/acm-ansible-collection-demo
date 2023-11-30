@@ -33,9 +33,9 @@
       register: maintenance_label_set
 
   tasks:
-    - name: Pause for 2 minutes
+    - name: Pause for 1 second
       wait_for:
-        timeout: 120
+        timeout: 1
       when: mc_run_playbook
 
 #    - name: "This is just a placeholder for a sample role"
