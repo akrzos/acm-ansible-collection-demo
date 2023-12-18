@@ -18,6 +18,7 @@
 
     - debug:
         msg: "{{ mc_run_playbook }}"
+      when: mc_run_playbook
 
     - name: "Create maintenance label in managed clusters"
       k8s:
@@ -36,7 +37,9 @@
     - name: Pause for 1 minute
       wait_for:
         timeout: 60
-      when: mc_run_playbook
+      when:
+      - mc_run_playbook
+      - maintenance_label_set is changed
 
 #    - name: "This is just a placeholder for a sample role"
 #      include_role:
